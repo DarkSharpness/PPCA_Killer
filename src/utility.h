@@ -6,11 +6,12 @@
 #include <stdint.h>
 #include <string.h>
 #include <locale>
+#include <vector>
 
 namespace dark {
 
 /* The real code marker. */
-enum class code : uint8_t {
+enum class code : int8_t {
     lui,    /* Load upper immediate. */
     auipc,  /* Add upper immediate to pc. */
     jal,    /* Jump and link. */
@@ -52,7 +53,7 @@ enum class code : uint8_t {
 
 
 /* Suc : Last 7 bit code. */
-enum class suc_code : uint8_t {
+enum class suc_code : int8_t {
     lui   = 0b0110111, // Upper
     auipc = 0b0010111, // Upper
     jal   = 0b1101111, // Jump
@@ -66,22 +67,23 @@ enum class suc_code : uint8_t {
 
 
 /* Mid : bit 14 ~ 12  */
-enum class alu_code : uint8_t {
-    add  =           0b000,
-    sub  = (uint8_t)~0b000,
-    sll  =           0b001,
-    slt  =           0b010,
-    sltu =           0b011,
-    xor_ =           0b100,
-    srl  =           0b101,
-    sra  = (uint8_t)~0b101,
-    or_  =           0b110,
-    and_ =           0b111,
+enum class alu_code : int8_t {
+    add  =          0b000,
+    sub  = (int8_t)~0b000,
+    sll  =          0b001,
+    slt  =          0b010,
+    sltu =          0b011,
+    xor_ =          0b100,
+    srl  =          0b101,
+    sra  = (int8_t)~0b101,
+    or_  =          0b110,
+    and_ =          0b111,
+    jal 
 };
 
 
 /* Mid : bit 14 ~ 12  */
-enum class memory_code : uint8_t {
+enum class memory_code : int8_t {
     byte  = 0b000,
     half  = 0b001,
     word  = 0b010,
@@ -91,7 +93,7 @@ enum class memory_code : uint8_t {
 
 
 /* Mid : bit 14 ~ 12  */
-enum class branch_code : uint8_t {
+enum class branch_code : int8_t {
     beq  = 0b000,
     bne  = 0b001,
     blt  = 0b100,
@@ -100,12 +102,19 @@ enum class branch_code : uint8_t {
     bgeu = 0b111,
 };
 
+
+/* Simple wrapper of bus value. */
+struct wrapper {
+    uint32_t val; /* Value of the register. */
+    uint32_t idx; /* Index of the register/RoB. */
+};
+
 }
 
 
 namespace dark {
 
-using code_type = code;
+using code_type  = code;
 
 using word_stype = int32_t;
 using half_stype = int16_t;
@@ -119,6 +128,7 @@ using address_type  = uint32_t;
 using command_type  = uint32_t;
 using register_type = uint32_t;
 
+using return_list = std::vector <wrapper>;
 
 /* Judge whether given char is a visible char */
 bool is_visible_char(int __c) noexcept

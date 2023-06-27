@@ -3,20 +3,22 @@
 
 #include "utility.h"
 #include "memchip.h"
+#include "register.h"
 
 namespace dark {
 
-constexpr address_type memory_size = 1 << 16;
+/**
+ * @brief A simple CPU simulator.
+ * 
+ */
+struct cpu : register_file {
+    size_t clock; /* Internal clock. */
 
-
-struct cpu : memory_chip <memory_size> {
-    size_t __clock;
-    
     /* Work in one cycle. */
     bool work() noexcept {
 
 
-        ++__clock;
+        ++clock;
     }
 };
 

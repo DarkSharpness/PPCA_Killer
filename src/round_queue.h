@@ -6,12 +6,13 @@ namespace dark {
 template <class T,int __n>
 struct round_queue {
     T data[__n];
-    int  head = 0;
-    int  tail = 0;
+    int head = 0;
+    int tail = 0;
+
     /* Clear all the elements in the queue. */
     void clear() noexcept { head = tail = 0; }
 
-    /* Push an element to the back of the queue. */
+    /* Force to push an element to the back of the queue. */
     void push(const T &__v) noexcept {
         data[tail++] = __v;
         if(tail == __n)  tail =  0;
@@ -25,6 +26,8 @@ struct round_queue {
         if(head == __n)  head = 0;
     }
 
+    T &operator [](int x) noexcept { return data[x]; }
+
     /* Return reference to the first element. */
     T &front() noexcept { return data[head]; }
     /* Return const reference to the first element. */
@@ -37,6 +40,7 @@ struct round_queue {
     /* Return whether the queue is empty. */
     bool empty()const noexcept { return head == tail; }
 
+    constexpr int length() const noexcept { return __n; }
 };
 
 }

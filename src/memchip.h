@@ -8,20 +8,20 @@ namespace dark {
 
 template <size_t __n>
 struct memory_chip {
-    char data[__n];
+    char data[__n]; /* The real internal data. */
 
+    /* Load a trivial type from memory. */
     template <class T>
-    void load(size_t __pos,T &__v) {
-        __v = *reinterpret_cast <T *> (data + __pos);
-    }
+    void load(address_type __pos,T &__v,size_t __m = sizeof(T)) 
+    noexcept { memcpy(&__v,data + pos,__m); }
 
+    /* Store a trivial type into memory. */
     template <class T>
-    void store(size_t __pos,const T &__v) {
-        *reinterpret_cast <T *> (data + __pos) = __v;
-    }
+    void store(address_type __pos,const T &__v,size_t __m = sizeof(T)) 
+    noexcept { memcpy(data + pos,&__v,__m); }
 
     /* Initial program data into memory from stdin. */
-    void init() {
+    void init() noexcept {
         char buffer[16];
         address_type __a = 0;
         while(read_token(buffer)) {
