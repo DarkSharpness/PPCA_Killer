@@ -18,8 +18,13 @@ struct instruction {
             command_type rs1 : 5;   /* Register 1.    */
             command_type mid : 3;   /* Mid code part. */
             command_type rd  : 5;   /* Register destination part. */
-            command_type suc : 7;   /* Suc code part. */
         };
+        struct {
+            suc_code ____[3];
+            suc_code     : 1;
+            suc_code suc : 7; /* Suc code part. */ 
+        };
+
         struct { /* U command. */
             command_type U_imm_31_12 : 20; 
         };
@@ -45,17 +50,85 @@ struct instruction {
             command_type B_imm_11_11 :  1;
         };
     };
+
+    /* 12 bits , need right shift 1. */
+    address_type B_immediate() const noexcept {
+        return
+            B_imm_12_12 << 11 |
+            B_imm_11_11 << 10 |
+            B_imm_10_05 <<  4 |
+            B_imm_04_01 <<  0 ;
+    }
+
+    /* 20 bits , need right shift 1. */
+    address_type J_immediate() const noexcept {
+        return
+            J_imm_20_20 << 19 |
+            J_imm_19_12 << 11 |
+            J_imm_11_11 << 10 |
+            J_imm_10_01 <<  0 ;
+    }
+
+    /* 12 bits. */
+    address_type S_immediate() const noexcept { return S_imm_11_05 << 5 | S_imm_04_00 << 0 ; }
 };
 
 static_assert(sizeof(instruction) == sizeof(command_type));
 
-struct instruction_fetcher {
+struct data_pack {
+    union {
+        command_type command;
+        struct { /* Common data. */
+            register_type     : 12;
+            register_type rs1 :  5; /* Register source 1. */
+            register_type     :  3; /* Mid code part. */
+            register_type  rd :  5; /* Register destination part. */
+        };
 
-    void fetch_instruction() {
+        struct { /* B type data. */
+            register_type       :  7;
+            register_type R_rs2 :  7;
+            register_type       :  5; 
+            register_type       :  3;
+            register_type B_rs2 :  5; /* Register source 2. */
+        };
 
+        struct { /* S type data. */
+            register_type       :  7;
+            register_type       :  7;
+            register_type       :  5; 
+            register_type       :  3;
+            register_type S_rs2 :  5; /* Register source 2. */
+        };
 
-    }
+        struct { /* Common suc code. */
+            ALU_code _____[2]; /* Padding. */
+            mid_code      : 1;
+            mid_code type : 3;
+            mid_code      : 4;
+            union {
+                struct {
+                    ALU_code         : 1;
+                    ALU_code ALU_suc : 7;
+                };
+                struct {
+                    MEM_code         : 1;
+                    MEM_code MEM_suc : 7;
+                };
+                struct {
+                    suc_code         : 1;
+                    suc_code U_J_suc : 7;
+                };
+            };
+        };
+
+        struct { register_type imm_12 : 12; };
+
+        struct { register_type imm_20 : 20; };
+
+    };
 };
+static_assert(sizeof(data_pack) == sizeof(instruction));
 
 
 }
