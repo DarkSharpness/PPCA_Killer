@@ -11,29 +11,35 @@ namespace dark {
 constexpr address_type memory_size = 1 << 20;
 
 /**
- * @brief A buffered fixed-sized memory_chip.
+ * @brief A buffered fixed-sized memory chip.
  * 
  */
 struct memory : memory_chip <memory_size> {
     /* Entry of one memory buffer. */
     struct entry {
-        word_utype        :  2;
-        word_utype sign   :  1; /* Load signed or unsigned. */
+        word_utype code   :  3; /* The code */
         word_utype prev   :  5; /* Last store operation. */
+        word_utype        :  2;
         word_utype dest   :  5; /* Index in the reorder buffer. */
-        word_utype size   :  2; /* The bit_length of data.  */
         word_utype idx1   :  5; /* Index of constraint1 in reorder. */
         word_stype offset : 12; /* Offset of address (with additional sign bit) */
 
         register_type  source1;  /* The source register value.           */
         register_type  source2;  /* Result of the calculation or source. */
 
+
+        /* Load signed or unsigned. */
+        bool sign() const noexcept { return code & 0b100; }
+        /* The bit_length of data.  */
+        bool size() const noexcept { return code & 0b011; }
+
         /* Set this command as done. */
-        void set_done() noexcept       { size = 3; }
+        void set_done() noexcept       { code |= 0b011; }
         /* Whether this command is done. */
-        bool is_done() const noexcept  { return size == 3; }
+        bool is_done()  const noexcept { size() == 0b011; }
         /* Whether this command is available to operate. */
         bool is_ready() const noexcept { return idx1 == FREE; }
+
         /* Return the real address. */
         address_type address() const noexcept
         { return source1 + offset; }
@@ -44,10 +50,12 @@ struct memory : memory_chip <memory_size> {
     entry current;                  /* Current  entry. */
     
     address_type pc =   0  ;    /* PC pointer. */
-    bool load_tag   = false;    /* Whether current is load operation. */
+
     byte_stype cc   =  -1  ;    /* Stupid counter...... */
-    byte_utype last = FREE ;     /* Lastest store information. */
-    byte_stype index;           /* Index of current opeartion in queue. */
+    byte_utype last = FREE ;    /* Lastest store information. */
+    byte_utype index;   /* Index of current opeartion in queue. */
+    bool    load_tag;   /* Whether current is load operation. */
+
 
     /**
      * @brief Inner method of fetching a command.
@@ -58,56 +66,57 @@ struct memory : memory_chip <memory_size> {
      * @param __pc The real PC value.
      * @return command_type 
      */
-    command_type fetch(command_type __cmd)
+    void fetch(command_type &__cmd)
     noexcept { memory_chip::load(pc,__cmd,4); }
 
     /* Inner handle. */
-    void work_counter() noexcept {
-        if(~cc || cc--) return;
-        /* Now cc = -1. */
-        if(load_tag) {
+    return_list work_counter() noexcept {
+        if(~cc || cc--) return {};
+
+        /* Now the work is done and must be commited at once. */
+        if(load_tag) { /* Load from memory */
             memory_chip::load(current.address(),
                               current.source2,
-                              1 << current.size);
-            if(current.sign) {
-                if(current.size == 0)
+                              1 << current.size());
+            if(current.sign()) {
+                if(current.size() == 0)
                     current.source2 = (int8_t)  current.source2;
-                if(current.size == 1)
+                if(current.size() == 1)
                     current.source2 = (int16_t) (current.source2);
-            } current.set_done();
-            loader[index] = current;
-        } else { /* Load into memory. */
+            }
+            loader[index].set_done();
+            return {{current.source2,current.dest}};
+        } else { /* Store into memory. */
             memory_chip::store(current.address(),
                                current.source2,
-                               1 << current.size);
+                               1 << current.size());
+
             int head = loader.head;
             int size = loader.dist;
+            /* Update the prev pointers in the queue. */
             while(size-- && loader[head].prev == current.dest) {
                 loader[head].prev = FREE;
                 if(++head == loader.length()) head = 0;
             } if(last == current.dest) last = FREE;
-        } /* Set done and change the index. */
+            return {};
+        }
     }
-
-    /* Inner handle. */
-    void clear_pipeline() noexcept
-    { loader.clear() , load_tag  = false , cc = -1 , last = FREE; }
 
     /**
      * @brief Work for one cycle. 
      * 
      * @return Whether load information is done.
      */
-    wrapper work() noexcept {
+    return_list work() noexcept {
         /* Empty and nothing doing. */
         if(loader.empty()) return {};
         /* Counter should decrease in this cycle. */
-        work_counter();
-        /* If head is done,then we should push now. */
-        auto head = loader.front();
-        if(!head.is_done()) return {};
-        else return {head.source2,head.dest};
+        return work_counter();
     }
+
+    /* Clear the pipeline. */
+    void clear_pipeline() noexcept
+    { loader.clear() , cc = -1 , last = FREE; }
 
     /* A wire indicating whether the loader is full. */
     bool is_full() const noexcept { return loader.full(); }
@@ -117,19 +126,17 @@ struct memory : memory_chip <memory_size> {
      * 
      * @attention Use it in the end of a cycle.
      */
-    inline void insert (word_utype __sign,
+    inline void insert (word_utype __code,
                         word_utype __dest,
-                        word_utype __length,
                         word_stype __offset,
                         wrapper    __reg1) noexcept {
         loader.push({
-                    __sign,
+                    __code,
                     last,
                     __dest,
-                    __length,
-                    __reg1.idx,
+                    __reg1.index(),
                     __offset,
-                    __reg1.val,
+                    __reg1.value(),
                     0
                 });
     }
@@ -142,15 +149,13 @@ struct memory : memory_chip <memory_size> {
      * 
      * @attention Use it in the end of a cycle.
      */
-    void store (word_utype  __dest  ,
-                word_utype  __length,
-                word_stype  __offset,
+    void store (word_utype  __dest,
+                word_utype  __code,
                 register_type __reg1,
                 register_type __reg2) noexcept {
         load_tag = false , cc = 2;
         current.dest    = __dest;
-        current.size    = __length;
-        current.offset  = 0;
+        current.code    = __code;
         current.source1 = __reg1;
         current.source2 = __reg2;
     }
@@ -158,23 +163,20 @@ struct memory : memory_chip <memory_size> {
     /**
      * @brief Update the dependency from RoB.
      * 
+     * @param wrapper Register file modification.
      * @attention Use it after insertion.
      */
     void update(wrapper __data) noexcept {
         int head = loader.head;
         int size = loader.dist;
-        if(!__data.is_file()) {
-            if(__data.is_jump_WA()) clear_pipeline();
-            return; /* BRANCH || JALR || STORE. */
-        } while(size--) {
+        while(size--) {
             auto &__c = loader[head];
-            if(__c.idx1 == __data.idx) {
+            if(__c.idx1 == __data.index()) {
                 __c.idx1    = FREE;
-                __c.source1 = __data.val;
+                __c.source1 = __data.value();
             }
         }
     }
-
 
     /**
      * @brief This fucking operation is designed to 
@@ -184,16 +186,16 @@ struct memory : memory_chip <memory_size> {
      * @attention This function should only be operated
      * in the end of a cycle.
      */
-    void sync() {
+    void sync() noexcept {
         /* Is calculating || Nothing can be done. */
         if(cc != -1 || loader.empty()) return;
 
-        /* Pop out the first load element if done. */
-        if(loader.front().is_done()) loader.pop();
-
         /* Tries to load a new element. */
+        while(loader.size() && loader.front().is_done()) loader.pop();
+
         int head = loader.head;
         int size = loader.dist;
+        /* Find the first ready and undone , then work on it. */
         while(size-- && loader[head].prev == FREE) {
             if(loader[head].is_ready() && !loader[head].is_done()) {
                 load_tag = true, cc = 2;
@@ -203,8 +205,6 @@ struct memory : memory_chip <memory_size> {
             } if(++head == loader.length()) head = 0;
         }
     }
-
-
 
 };
 

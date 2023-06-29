@@ -51,22 +51,26 @@ struct instruction {
         };
     };
 
-    /* 12 bits , need right shift 1. */
+    /* Full immediate number. */
     address_type B_immediate() const noexcept {
         return
-            B_imm_12_12 << 11 |
-            B_imm_11_11 << 10 |
-            B_imm_10_05 <<  4 |
-            B_imm_04_01 <<  0 ;
+            sign_expand <13,address_type> (
+                B_imm_12_12 << 12 |
+                B_imm_11_11 << 11 |
+                B_imm_10_05 <<  5 |
+                B_imm_04_01 <<  1 , B_imm_12_12
+            );
     }
 
-    /* 20 bits , need right shift 1. */
+    /* Full immediate number. */
     address_type J_immediate() const noexcept {
         return
-            J_imm_20_20 << 19 |
-            J_imm_19_12 << 11 |
-            J_imm_11_11 << 10 |
-            J_imm_10_01 <<  0 ;
+            sign_expand <21,address_type> (
+                J_imm_20_20 << 20 |
+                J_imm_19_12 << 12 |
+                J_imm_11_11 << 11 |
+                J_imm_10_01 <<  1 , J_imm_20_20
+            );
     }
 
     /* 12 bits. */

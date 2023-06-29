@@ -44,15 +44,11 @@ struct reservation_station {
         for(auto i  = array_state._Find_first() ;
                  i != array_state.size() ; i = array_state._Find_next(i)) {
             if(array[i].is_ready()) { /* Simulate the delay of 1 clock. */
-                if (array[i].op == ALU_code::WORKING) {
-                    array_syncs[i]  = false;
-                    list.push_back({array[i].result,array[i].dest});
-                } else if(__cnt != array_length(unit)) {
-                    array[i].result = unit[__cnt].work(array[i].src1,
-                                                       array[i].src2,
-                                                       array[i].op);
-                    array[i].op     = ALU_code::WORKING;
-                }
+                array_syncs[i]  = false;
+                array[i].result = unit[__cnt].work(array[i].src1,
+                                                   array[i].src2,
+                                                   array[i].op);
+                list.push_back({array[i].result,array[i].dest});
             }
         } return list;
     }

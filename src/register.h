@@ -48,7 +48,6 @@ struct register_file {
         };
     };
 
-    constexpr static byte_utype free = -1;
     byte_utype nxt[32]; /* Dependency of register. */
 
     /* Intialization. */
@@ -63,14 +62,10 @@ struct register_file {
      * @param __pos Index in the reorder buffer.
      * @param __new Value of the new register data.
      */
-    void commit(byte_utype __pos,register_type __new) noexcept {
-        /* This process is actually working parallelly. */
-        for(auto i = 0 ; i != array_length(reg) ; ++i) {
-            if(nxt[i] == __pos) {
-                nxt[i] = free;
-                reg[i] = __new;
-            }
-        }
+    void commit(word_utype __idx,word_utype __pos,
+                register_type __new) noexcept {
+        reg[__idx] = __new;
+        if(nxt[__idx] == __pos) nxt[__idx] = -1;
     }
 
     /**
@@ -79,12 +74,17 @@ struct register_file {
      * @param __idx Index of the register.
      * @param __pos Index in the reorder buffer.
      */
-    void insert(byte_utype __idx,byte_utype __pos) 
+    void insert(word_utype __idx,byte_utype __pos) 
     noexcept { nxt[__idx] = __pos; }
 
     /* Whether the current register is busy. (-1 -> not busy) */
     wrapper reorder(byte_utype __pos) const noexcept
-    { return {reg[__pos],sign_expand <8,uint32_t>(nxt[__pos])}; }
+    { return {reg[__pos],nxt[__pos] == uint8_t(-1) ? FREE : nxt[__pos]}; }
+
+    /* Clear the pipline. */
+    void clear_pipeline() {
+
+    }
 };
 
 }

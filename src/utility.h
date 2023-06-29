@@ -7,53 +7,13 @@
 #include <string.h>
 #include <locale>
 #include <vector>
+#include <bitset>
 
 namespace dark {
 
-/* The real code marker. */
-enum class code : int8_t {
-    lui,    /* Load upper immediate. */
-    auipc,  /* Add upper immediate to pc. */
-    jal,    /* Jump and link. */
-    jalr,   /* Jump and link register. */
-    beq,    /* Branch when equal. */
-    bne,    /* Branch when not equal. */
-    blt,    /* Branch when less than. */
-    bge,    /* Branch when greater or equal. */
-    bltu,   /* Branch when less than (unsigned). */
-    bgeu,   /* Branch when greater or equal (unsigned). */
-    lb,     /* Load byte. */
-    lh,     /* Load half word. */
-    lw,     /* Load word. */
-    lbu,    /* Load unsigned byte. */
-    lhu,    /* Load unsigned half word. */
-    sb,     /* Store byte. */
-    sh,     /* Store half word. */
-    sw,     /* Store word. */
-    addi,   /* Add immediate. */
-    slti,   /* Set if less than immediate. */ 
-    sltiu,  /* Set if less than immediate(unsigned). */
-    xori,   /* Xor immediate. */
-    ori,    /* Or  immediate. */
-    andi,   /* And immediate. */
-    slli,   /* Shift left  logical immediate. */
-    srli,   /* Shift right logical immediate. */
-    srai,   /* Shift right arithmetic immediate. */
-    add,    /* Add 2 registers. */
-    sub,    /* Subtract 2 registers. */
-    sll,    /* Shift left  logical. */
-    slt,    /* Set if less than. */
-    sltu,   /* Set if less than unsigned.*/
-    xor_,   /* Xor 2 registers. */
-    srl,    /* Shift right logical. */
-    sra,    /* Shift right arithmetic. */
-    or_,    /* Or  2 registers. */
-    and_    /* And 2 registers. */
-};
-
 
 /* Suc : Last 7 bit code. */
-enum class suc_code : int8_t {
+enum class suc_code : uint8_t {
     lui   = 0b0110111, // Upper
     auipc = 0b0010111, // Upper
     jal   = 0b1101111, // Jump
@@ -65,25 +25,49 @@ enum class suc_code : int8_t {
     rcode = 0b0110011  // Arithmetic
 };
 
-
-/* Mid : bit 14 ~ 12  */
-enum class alu_code : int8_t {
-    add  =          0b000,
-    sub  = (int8_t)~0b000,
-    sll  =          0b001,
-    slt  =          0b010,
-    sltu =          0b011,
-    xor_ =          0b100,
-    srl  =          0b101,
-    sra  = (int8_t)~0b101,
-    or_  =          0b110,
-    and_ =          0b111,
-    jal 
+/* Mid : bit 14 ~ 12*/
+enum class mid_code : int8_t {
+    B_type, /* ALU code. */
+    I_type, /* ALU code. */
+    R_type, /* ALU code. */
+    L_type, /* Memory code. */
+    S_type, /* Memory code. */
 };
 
+/* Mid : bit 14 ~ 12  */
+enum class ALU_code : int8_t {
+    ADD =  0b000,
+    SUB = ~0b000,
+    ALL =  0b001,
+    XOR =  0b100,
+    SRL =  0b101,
+    SRA = ~0b101,
+    OR  =  0b110,
+    AND =  0b111,
+    EQ  = ~0b111,
+    NE  = ~0b110,
+    LT  =  0b010,
+    GE  = ~0b010,
+    LTU =  0b011,
+    GEU = ~0b011,
+
+    WORKING = ~0b100  /* Magic number. */
+};
+
+/* Branch code should be remapped. */
+constexpr ALU_code B_ALU_map[] = {
+    ALU_code::EQ,
+    ALU_code::NE,
+    ALU_code::WORKING, /* Empty. */
+    ALU_code::WORKING, /* Empty. */
+    ALU_code::LT,
+    ALU_code::GE,
+    ALU_code::LTU,
+    ALU_code::GEU,
+};
 
 /* Mid : bit 14 ~ 12  */
-enum class memory_code : int8_t {
+enum class MEM_code : uint8_t {
     byte  = 0b000,
     half  = 0b001,
     word  = 0b010,
@@ -91,30 +75,46 @@ enum class memory_code : int8_t {
     uhalf = 0b101,
 };
 
-
-/* Mid : bit 14 ~ 12  */
-enum class branch_code : int8_t {
-    beq  = 0b000,
-    bne  = 0b001,
-    blt  = 0b100,
-    bge  = 0b101,
-    bltu = 0b110,
-    bgeu = 0b111,
-};
-
+constexpr uint32_t       FREE = 31; /* Maximum available in RoB. */
+constexpr uint32_t    REG_TAG = 0;  /* Noraml command. */ 
+constexpr uint32_t   JALR_TAG = 1;  /* JALR.   */
+constexpr uint32_t  STORE_TAG = 2;  /* JALR.   */
+constexpr uint32_t BRANCH_TAG = 3;  /* B-type. */
 
 /* Simple wrapper of bus value. */
-struct wrapper {
+struct wrapper { /* 32 + 7 bits */
     uint32_t val; /* Value of the register. */
     uint32_t idx; /* Index of the register/RoB. */
+
+    /* Return the index in reorder buffer. */
+    uint32_t index() const noexcept { return idx & FREE; }
+    /* Return the value from given reorder.(is_file() == true) */
+    uint32_t value() const noexcept { return val; }
+ 
+    /* Return pc pointer from given reorder.(is_file() == true) */
+    uint32_t pc() const noexcept { return val & ~1; }
+
+    /* Whether to store into register file. */
+    bool is_file()    const noexcept { return idx >> 5 == 0; }
+    /* Whether a  jalr command. */
+    bool is_jalr()    const noexcept { return idx >> 5 == 1; }
+    /* Whether a store command. */
+    bool is_store()   const noexcept { return idx >> 5 == 2; }
+    /* Previous prediction. */
+    bool prediction() const noexcept { return idx & 1; }
+    /* Whether jump successfully. */
+    bool is_jump_AC() const noexcept { return idx >> 5 == 3 && (val ^ prediction()) == 0; }
+    /* Whether jump wrongly. */
+    bool is_jump_WA() const noexcept { return idx >> 5 == 3 && (val ^ prediction()) == 1; }
+    /* Whether the commit message is empty. */
+    bool is_empty()   const noexcept { return idx == 0; }
 };
+
 
 }
 
 
 namespace dark {
-
-using code_type  = code;
 
 using word_stype = int32_t;
 using half_stype = int16_t;
@@ -134,7 +134,6 @@ using return_list = std::vector <wrapper>;
 bool is_visible_char(int __c) noexcept
 { return __c > 126 || __c < 33; }
 
-
 /* Read a token. Return whether EOF isn't reached. */
 bool read_token(char *__str) noexcept {
     int __c;
@@ -144,36 +143,42 @@ bool read_token(char *__str) noexcept {
     return __c != EOF;
 }
 
-
 /* Map a char into a hex number. */
 int char_map(char x) noexcept { return isdigit(x) ? x - '0' : x - 'A' + 10; }
 
-
 /* Turn a hex number string into a trivial number type. */
 template <class T>
-T to_integer(char *__str) noexcept {
+T hex_to_integer(char *__str) noexcept {
     T __v = 0;
     while(*__str) __v = __v << 4 | char_map(*__str++);
     return __v;
 }
 
-
 /* The bit length of an integer. */
 template <class T>
 constexpr size_t bit_length = sizeof(T) << 3;
-
 
 /* Expand n bit integer by its sign. */
 template <size_t __n,class T>
 T sign_expand(T __v) noexcept {
     static_assert(__n > 0 && __n < bit_length <T>);
     return __v & (1 << (__n - 1)) ? /* Test sign bit of current integer. */
-             (T(-1) << __n) | __v : /* Fill upper bits with 1. */
-            ~(T(-1) << __n) & __v ; /* Fill upper bits with 0. */
+             ((-1u) << __n) | __v : /* Fill upper bits with 1. */
+            ~((-1u) << __n) & __v ; /* Fill upper bits with 0. */
+}
+
+/* Expand n bit integer by its sign. */
+template <size_t __n,class T>
+T sign_expand(T __v,bool __bit) noexcept {
+    static_assert(__n > 0 && __n < bit_length <T>);
+    return __bit == true ? /* Test sign bit of current integer. */
+             ((-1u) << __n) | __v : /* Fill upper bits with 1. */
+            ~((-1u) << __n) & __v ; /* Fill upper bits with 0. */
 }
 
 template <class T,size_t __n>
 constexpr size_t array_length(T (&__a)[__n]) { return __n; }
+
 
 }
 

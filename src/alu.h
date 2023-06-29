@@ -28,9 +28,9 @@ struct arithetic_logic_unit {
             case ALU_code::GEU : return (word_utype)__reg1 >= (word_utype)__reg2;
             case ALU_code::EQ  : return             __reg1 == __reg2;
             case ALU_code::NE  : return             __reg1 != __reg2;
-            case ALU_code::XOR: return             __reg1  ^ __reg2;
-            case ALU_code::OR : return             __reg1  | __reg2;
-            case ALU_code::AND: return             __reg1  & __reg2;
+            case ALU_code::XOR : return             __reg1  ^ __reg2;
+            case ALU_code::OR  : return             __reg1  | __reg2;
+            case ALU_code::AND : return             __reg1  & __reg2;
             default: throw;/* This should never happen. */
         }
     }

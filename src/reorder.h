@@ -9,56 +9,66 @@ namespace dark {
 /* The buffer for */
 struct reorder_buffer {
     struct entry {
-        word_utype    tag : 2;   /* Whether branch or store.  */
-        word_utype   done : 1;   /* Whether command done tag. */
-        word_utype     result;   /* Result of the calculation. */
+        word_utype     result;  /* Result of the calculation. */
+        word_utype   done : 1;  /* Whether command done tag. */
+        word_utype    tag : 2;  /* Tag of type of command..  */
+        word_utype   dest : 5;  /* Destination in register file. */
     }; static_assert(sizeof(entry) == 8);
 
     round_queue <entry,FREE> queue; /* The round queue inside. */
-    bool sync_tag = false;          /* Whether to pop in sync. */
 
     /**
      * @brief Work in one cycle. 
      * 
-     * @return Commit message.
+     * @return Commit message. With result + tag + destination register.
      */
     wrapper work() noexcept {
         if(queue.size() && queue.front().done) {
             auto __tmp = queue.front();
-            sync_tag   = true;
-            return {__tmp.result,__tmp.tag << 5 | queue.head};
-        } else return {};
+            return {__tmp.result,__tmp.tag << 5 | __tmp.dest};
+        } else return {0,0};
     }
 
-    /* Return whether the queue inside is empty. */
-    bool buffer_full() const noexcept { return queue.full(); }
+    /* A wire of the head index of buffer. */
+    uint32_t buffer_head() const noexcept
+    { return queue.head; }
+
+    /* A wire of the next available address in queue. */
+    uint32_t buffer_tail() const noexcept
+    { return queue.full() ? FREE : queue.tail(); }
+
+    /* A wire of whether the RoB is empty. */
+    bool empty() const noexcept { return queue.empty(); }
 
     /* Update one command from the bus. */
     void update(const return_list &__list) noexcept {
         for(auto &&iter : __list) {
-            queue[iter.idx].done    = true;
-            queue[iter.idx].result ^= iter.val;
+            queue[iter.index()].done    = true;
+            queue[iter.index()].result |= iter.value();
+            /* 
+                This is a smart trick for prediction case.
+                In BRANCH,the result will be stored in the last bit.
+                Since pc is stored into result with last bit as 0,
+                we can perform OR operation to store results.
+             */
         }
-    }
-
-    /* Initial result as 0.  */
-    word_utype init_result(word_utype __tag,address_type __pc) {
-        if      (__tag == JUMP_TAG) return __pc |  1;
-        else if (__tag == STAY_TAG) return __pc & ~1;
-        else                        return 0;
     }
 
     /**
      * @brief Insert one command into reorder buffer.
      * 
+     * @param __arg If BRANCH, __arg = pc (loweset bit = predicition)
+     * If STORE, __arg = data_pack (parsed command)
+     * If JAL/AUIPC/LUI , __arg = new result (And naturally, done = true) 
+     * If other cases, __arg = 0.
      * @attention Use it in the end of a cycle.
      */
-    void insert(word_utype __tag,address_type __pc) noexcept {
-        queue.push({__tag,
-                    __tag == STORE_TAG, /* Store is naturally done. */
-                    init_result(__tag,__pc)  /* If jump,tag == 1 */
-                });
-    }
+    void insert(word_utype  __arg,word_utype  __tag,
+                word_utype __dest,word_utype __done)
+    noexcept { queue.push({__arg,__done,__tag,__dest}); }
+
+    /* Clear the pipeline. */
+    void clear_pipeline() noexcept { queue.clear(); }
 
     /**
      * @brief This fucking operation is designed to 
@@ -68,7 +78,7 @@ struct reorder_buffer {
      * @attention This function should only be operated
      * in the end of the cycle.
      */
-    void sync() noexcept { if(sync_tag) queue.pop() , sync_tag = false; }
+    void sync() noexcept { if(queue.size() && queue.front().done) queue.pop(); }
 
 };
 
