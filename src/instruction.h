@@ -20,7 +20,7 @@ struct instruction {
             command_type rs2 : 5;   /* Register 2.    */
             command_type pre : 7;   /* Pre code part. */
         };
-        struct {
+        struct { /* Common data. */
             suc_code suc : 7; /* Suc code part. */ 
         };
 

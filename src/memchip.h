@@ -13,14 +13,14 @@ struct memory_chip {
     /* Load a trivial type from memory. */
     template <class T>
     void load(address_type __pos,T &__v,size_t __m) /*noexcept*/ { 
-        // if(__pos + __m > __n) return;
+        if(__pos + __m > __n) return;
         memcpy(&__v,data + __pos,__m);
     }
 
     /* Store a trivial type into memory. */
     template <class T>
     void store(address_type __pos,const T &__v,size_t __m) /*noexcept*/ {
-        // if(__pos + __m > __n) return;
+        if(__pos + __m > __n) return;
         memcpy(data + __pos,&__v,__m);
     }
 

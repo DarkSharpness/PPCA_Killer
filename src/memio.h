@@ -46,16 +46,14 @@ struct memory : memory_chip <memory_size> {
 
 
     round_queue <entry,32> loader;  /* Load  buffer.   */
-    round_queue <entry,32> storer;  /* Store buffer.   */
     entry current;                  /* Current  entry. */
 
     address_type pc =   0 ;     /* PC pointer. */
 
+    bool   load_tag = false;    /* Whether current is load operation. */
     byte_stype   cc =  -1 ;     /* Stupid counter...... */
-    byte_utype last = FREE;     /* Last store RoB index in RoB   . */
-    byte_utype tail = FREE;     /* Last store RoB index in storer.*/
-    byte_utype index;   /* Index of current opeartion in loader queue. */
-    bool   load_tag = false;   /* Whether current is load operation. */
+    byte_utype last = FREE;     /* Last store RoB index in RoB. */
+    byte_utype index;           /* Index of current opeartion in loader queue. */
 
     /**
      * @brief Inner method of fetching a command.
@@ -74,43 +72,28 @@ struct memory : memory_chip <memory_size> {
      * @return Whether load information is done.
      */
     return_list work() /*noexcept*/ {
-        if(cc == -1 || cc--) return {};
+        if(cc == -1 || cc-- || !load_tag) return {};
 
-        /* Now the work is done and must be commited at once. */
-        if(load_tag) { /* Load from memory */
-            memory_chip::load(current.address(),
-                              current.source2,
-                              1 << current.size());
-            if(current.sign()) {
-                if(current.size() == 0)
-                    current.source2 = (int8_t)  current.source2;
-                if(current.size() == 1)
-                    current.source2 = (int16_t) (current.source2);
-            }
-            loader[index].set_done();
-            return {{current.source2,current.dest}};
-        } else { /* Store into memory. */
-            memory_chip::store(current.address(),
-                               current.source2,
-                               1 << current.size());
+        if(current.source2 != 0) throw error("Unknown source");
+        /* Now the loading work is done and must be commited at once. */
+        memory_chip::load(current.address(),
+                          current.source2,
+                          1 << current.size());
 
-            int head = loader.head;
-            int size = loader.dist;
-            /* Update the prev pointers in the queue. */
-            while(size-- && loader[head].prev == current.dest) {
-                loader[head].prev = FREE;
-                if(++head == loader.length()) head = 0;
-            }
-            if(tail == current.dest) tail = FREE;
-            if(last == current.dest) last = FREE;
-            return {};
-        }
+        /* Sign extension or not. */
+        if(current.sign()) {
+            if(current.size() == 0)
+                current.source2 = (int8_t)  current.source2;
+            if(current.size() == 1)
+                current.source2 = (int16_t) current.source2;
+        } loader[index].set_done();
+
+        return {{current.source2,current.dest}};
     }
 
     /* Clear the pipeline when prediction fails. */
-    void clear_pipeline() /*noexcept*/ {
-        loader.clear() , last = tail , load_tag = false;
-    }
+    void clear_pipeline() /*noexcept*/ 
+    { loader.clear() , last = FREE, load_tag = false , cc = -1; }
 
     /* A wire indicating whether the loader is full. */
     bool is_full() const /*noexcept*/ { return loader.full(); }
@@ -123,17 +106,8 @@ struct memory : memory_chip <memory_size> {
     inline void insert (word_utype __code,
                         word_utype __dest,
                         word_stype __offset,
-                        wrapper    __reg1) /*noexcept*/ {
-        loader.push({
-            __code,
-            last,
-            __dest,
-            __reg1.index(),
-            __offset,
-            __reg1.value(),
-            0
-        });
-    }
+                        wrapper    __data) /*noexcept*/ 
+    { loader.push({__code,last,__dest,__data.index(),__offset,__data.value(),0}); }
 
     /* Special insert for store command. */
     void insert_store(word_utype __dest) { last = __dest; } 
@@ -145,23 +119,25 @@ struct memory : memory_chip <memory_size> {
      */
     void store (word_utype  __code,
                 word_utype  __dest,
-                word_stype  __offs,
-                address_type __reg1,
+                address_type __addr,
                 address_type __reg2) /*noexcept*/ {
-        tail = __dest;
-        storer.push({
-            __code,
-            0,
-            __dest,
-            0,
-            __offs,
-            __reg1,
-            __reg2
-        }); if(storer.full()) throw error("Storer overflow!");
+        if(load_tag && cc != -1) throw error("Store failure!");
+
+        if(last == __dest) last = FREE;
+        load_tag = false , cc += 3;  /* Store time. */
+        memory_chip::store(__addr,__reg2,1 << (__code & 0b11));
+
+        /* Update the prev pointers in the queue. */
+        int head = loader.head;
+        int size = loader.dist;
+        while(size-- && loader[head].prev == __dest) {
+            loader[head].prev = FREE;
+            if(++head == loader.length()) head = 0;
+        }
     }
 
     /**
-     * @brief Update the dependency from RoB.
+     * @brief Update the dependency from RoB commit.
      * 
      * @param wrapper Register file modification.
      * @attention Use it after insertion.
@@ -174,8 +150,7 @@ struct memory : memory_chip <memory_size> {
             if(__c.idx1 == __data.index()) {
                 __c.idx1    = FREE;
                 __c.source1 = __data.value();
-            }
-            if(++head == loader.length()) head = 0;
+            } if(++head == loader.length()) head = 0;
         }
     }
 
@@ -188,27 +163,20 @@ struct memory : memory_chip <memory_size> {
      * in the end of a cycle.
      */
     void sync() /*noexcept*/ {
-        /* Is calculating || Nothing can be done. */
+        /* Is calculating. */
         if(cc != -1) return;
 
         /* Pop out all useless elements first. */
         while(loader.size() && loader.front().is_done()) loader.pop();
 
-        /* Tries to store a new element first. */
-        if(storer.size()) {
-            load_tag = false , cc = 2;
-            current  = storer.front();
-            storer.pop(); return;
-        }
-    
-        /* Tries to load a new element then. */
+        /* Find the first ready and undone , then work on it. */
         int head = loader.head;
         int size = loader.dist;
-        /* Find the first ready and undone , then work on it. */
         while(size-- && loader[head].prev == FREE) {
-            if(loader[head].is_ready() && !loader[head].is_done()) {
-                load_tag = true, cc = 2;
-                current  = loader[head];
+            auto &__c = loader[head];
+            if(__c.is_ready() && !__c.is_done()) {
+                load_tag = true , cc += 3;
+                current  = __c;
                 index    = head; return;
             } if(++head == loader.length()) head = 0;
         }

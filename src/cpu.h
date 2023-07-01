@@ -245,8 +245,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                     memory::store(
                         __inst.mid,
                         __head,
-                        __inst.S_immediate(),
-                        register_file::reg[__inst.rs1],
+                        register_file::reg[__inst.rs1] + __inst.S_immediate(),
                         register_file::reg[__inst.rs2]
                     );
                 } break;
