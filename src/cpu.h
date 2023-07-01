@@ -273,11 +273,22 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
             [&]() {flow.reservation_catch(reservation_station::work());},
         };
         static int order[4] = {0,1,2,3};
-        static std::random_device abelcat;
-        std::shuffle(order,order + array_length(order),abelcat);
+        // static std::random_device abelcat;
         ++clock;
+
+
+        // std::shuffle(order,order + array_length(order),abelcat);
+        for(int i = 0 ; i != array_length(order) ; ++i)
+            std::swap(order[i],order[i % array_length(order)]);
+
         for(int i = 0 ; i != array_length(order) ; ++i)
             func[order[i]]();
+
+        // work_fetch();
+        // flow.memory_catch(memory::work());
+        // flow.reorder_catch(reorder_buffer::work());
+        // flow.reservation_catch(reservation_station::work());
+
         /* Synchronize to simulate hardware. */   
         global_sync();
         return !is_terminal();
