@@ -7,6 +7,8 @@
 #include "register.h"
 #include "instruction.h"
 #include "reservation.h"
+#include <functional>
+#include <random>
 
 namespace dark {
 
@@ -264,13 +266,18 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
 
     /* Work in one cycle. */
     bool work() noexcept {
+        static std::function <void()> func[] = {
+            [&]() {work_fetch();},
+            [&]() {flow.memory_catch(memory::work());},
+            [&]() {flow.reorder_catch(reorder_buffer::work());},
+            [&]() {flow.reservation_catch(reservation_station::work());},
+        };
+        static int order[4] = {0,1,2,3};
+        static std::random_device abelcat;
+        std::shuffle(order,order + array_length(order),abelcat);
         ++clock;
-
-        work_fetch();
-        flow.memory_catch(memory::work());
-        flow.reorder_catch(reorder_buffer::work());
-        flow.reservation_catch(reservation_station::work());
-        
+        for(int i = 0 ; i != array_length(order) ; ++i)
+            func[order[i]]();
         /* Synchronize to simulate hardware. */   
         global_sync();
         return !is_terminal();
