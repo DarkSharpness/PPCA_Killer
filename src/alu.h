@@ -31,7 +31,7 @@ struct arithetic_logic_unit {
             case ALU_code::XOR : return             __reg1  ^ __reg2;
             case ALU_code::OR  : return             __reg1  | __reg2;
             case ALU_code::AND : return             __reg1  & __reg2;
-            default: /* This should never happen. */
+            default: return 0; /* This should never happen. */
         }
     }
 };

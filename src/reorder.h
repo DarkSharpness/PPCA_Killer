@@ -27,7 +27,7 @@ struct reorder_buffer {
         if(queue.size() && queue.front().done) {
             sync_tag = true;
             auto __tmp = queue.front();
-            return {__tmp.result,__tmp.tag << 5 | __tmp.dest};
+            return {__tmp.result,(address_type)(__tmp.tag << 5) | __tmp.dest};
         } else return {0,0};
     }
 
