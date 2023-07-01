@@ -11,8 +11,8 @@ namespace dark {
  * 
  */
 struct bus {
-    return_list RoB_update; /* Update reorder buffer. */
-    wrapper     ReG_update; /* Update register file and RS and LSB. */
+    return_list RoB_update;         /* Update reorder buffer. */
+    wrapper     ReG_update = {0,0}; /* Update register file and RS and LSB. */
 
     /**
      * @brief Catch the signal from reservation station.
@@ -20,7 +20,7 @@ struct bus {
      * 
      * @param __list List of updates.
      */
-    void reservation_catch(const return_list &__list) noexcept
+    void reservation_catch(const return_list &__list) /*noexcept*/
     { for(auto &&iter : __list) RoB_update.push_back(iter); }
 
      /**
@@ -30,7 +30,7 @@ struct bus {
      * @param __list List of updates.
      */
     void memory_catch(const return_list &__data)
-    noexcept { reservation_catch(__data); }
+    /*noexcept*/ { reservation_catch(__data); }
 
     /**
      * @brief Catch the signal from reorder buffer.
@@ -38,7 +38,7 @@ struct bus {
      * 
      * @param __list List of updates.
      */
-    void reorder_catch(wrapper __data) noexcept
+    void reorder_catch(wrapper __data) /*noexcept*/
     { ReG_update = __data; }
 
     /**

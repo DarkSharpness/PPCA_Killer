@@ -9,18 +9,18 @@ namespace dark {
 /* Station for instructions. */
 struct reservation_station {
     struct entry {
-        byte_utype      : 1;
         ALU_code    op  : 7;    /* Operator bit.     */
+        byte_utype      : 1;
         byte_utype idx1 : 5;    /* Index of constraint 1 reorder. */
         byte_utype idx2 : 5;    /* Index of constraint 2 reorder.  */
         byte_utype dest : 5;    /* Index of destination in reorder buffer. */
-        byte_utype      : 0;
+        byte_utype      : 1;
         register_type  src1;    /* Source value 1. */
         register_type  src2;    /* Source value 2.  */
         register_type result;   /* The result of reservation station. */
 
         /* Whether this entry is available to be executed. */
-        bool is_ready() const noexcept { return idx1 == FREE && idx2 == FREE; }
+        bool is_ready() const /*noexcept*/ { return idx1 == FREE && idx2 == FREE; }
     }; static_assert(sizeof(entry) == 16);
 
 
@@ -28,16 +28,15 @@ struct reservation_station {
     ALU_type unit[4];   /*    ALUs.     */
     entry  array[32];   /* Entry array. */
 
-    std::bitset <32> array_state{ 0};  /* Data in array.  */
-    std::bitset <32> array_syncs{-1};  /* Array's sync data. */
-
+    std::bitset <32> array_state{ 0U};  /* Data in array.  */
+    std::bitset <32> array_syncs{-1U};  /* Array's sync data. */
 
     /* A wire indicating whether the arithmetic station is full. */
-    bool is_full() const noexcept
+    bool is_full() const /*noexcept*/
     { return array_state.size() == array_state.count(); }
 
     /* Work in the cycle. */
-    return_list work() noexcept {
+    return_list work() /*noexcept*/ {
         return_list list; /* Return value list.     */
         size_t __cnt = 0; /* Count of ALU occupied. */
         /* This process is actually working parrallelly. */
@@ -53,8 +52,8 @@ struct reservation_station {
         } return list;
     }
 
-    /* Clear the pipeline. */
-    void clear_pipeline() noexcept
+    /* Clear the pipeline when prediction fails. */
+    void clear_pipeline() /*noexcept*/
     { array_state.reset(),array_syncs.set(); }
 
 
@@ -66,8 +65,9 @@ struct reservation_station {
     void insert(ALU_code __code,
                 wrapper  __reg1,
                 wrapper  __reg2,
-                register_type __dest) noexcept {
+                register_type __dest) /*noexcept*/ {
         int __x = (~array_state)._Find_first();
+        array_state[__x]= true; /* Set occupied. */
         array[__x].op   = __code;
         array[__x].idx1 = __reg1.index();
         array[__x].idx2 = __reg2.index();
@@ -81,7 +81,7 @@ struct reservation_station {
      * 
      * @attention Use it in the end of a cycle after inserting.
      */
-    void update(wrapper __data) noexcept {
+    void update(wrapper __data) /*noexcept*/ {
         for(auto i  = array_state._Find_first() ;
                  i != array_state.size() ; i = array_state._Find_next(i)) {
             if(array[i].idx1 == __data.index()) {

@@ -52,39 +52,39 @@ struct register_file {
 
     /* Intialization. */
     register_file() {
-        memset(reg, 0,sizeof(reg));  
-        memset(nxt,-1,sizeof(nxt)); /* Free. */
+        memset(reg,  0 ,sizeof(reg));  
+        memset(nxt,FREE,sizeof(nxt)); /* Free. */
     }
 
     /**
      * @brief Commit a order from reorder buffer.
      * 
+     * @param __idx Index in the register file.
      * @param __pos Index in the reorder buffer.
      * @param __new Value of the new register data.
      */
     void commit(word_utype __idx,word_utype __pos,
-                register_type __new) noexcept {
-        reg[__idx] = __new;
-        if(nxt[__idx] == __pos) nxt[__idx] = -1;
+                register_type __new) /*noexcept*/ {
+        if(__idx) reg[__idx] = __new;
+        if(nxt[__idx] == __pos) nxt[__idx] = FREE;
     }
 
     /**
      * @brief Marking one register as occupied.
+     * Note that 0 register won't be occupied.
      * 
      * @param __idx Index of the register.
      * @param __pos Index in the reorder buffer.
      */
-    void insert(word_utype __idx,byte_utype __pos) 
-    noexcept { nxt[__idx] = __pos; }
+    void insert(word_utype __idx,byte_utype __pos)
+    /*noexcept*/ { if(__idx) nxt[__idx] = __pos; }
 
     /* Whether the current register is busy. (-1 -> not busy) */
-    wrapper reorder(byte_utype __pos) const noexcept
-    { return {reg[__pos],nxt[__pos] == uint8_t(-1) ? FREE : nxt[__pos]}; }
+    wrapper reorder(byte_utype __pos) const /*noexcept*/
+    { return {reg[__pos],nxt[__pos]}; }
 
-    /* Clear the pipline. */
-    void clear_pipeline() {
-
-    }
+    /* Clear the pipeline when prediction fails. */
+    void clear_pipeline() /*noexcept*/{ memset(nxt,FREE,sizeof(nxt)); }
 };
 
 }

@@ -8,7 +8,7 @@
 namespace dark {
 
 
-constexpr address_type memory_size = 1 << 20;
+constexpr address_type memory_size = 1 << 21;
 
 /**
  * @brief A buffered fixed-sized memory chip.
@@ -27,35 +27,35 @@ struct memory : memory_chip <memory_size> {
         register_type  source1;  /* The source register value.           */
         register_type  source2;  /* Result of the calculation or source. */
 
-
         /* Load signed or unsigned. */
-        bool sign() const noexcept { return code & 0b100; }
+        bool sign() const /*noexcept*/ { return code & 0b100; }
         /* The bit_length of data.  */
-        bool size() const noexcept { return code & 0b011; }
+        auto size() const /*noexcept*/ { return code & 0b011; }
 
         /* Set this command as done. */
-        void set_done() noexcept       { code |= 0b011; }
+        void set_done() /*noexcept*/       { code |= 0b011; }
         /* Whether this command is done. */
-        bool is_done()  const noexcept { size() == 0b011; }
+        bool is_done()  const /*noexcept*/ { return size() == 0b011; }
         /* Whether this command is available to operate. */
-        bool is_ready() const noexcept { return idx1 == FREE; }
+        bool is_ready() const /*noexcept*/ { return   idx1 == FREE;  }
 
         /* Return the real address. */
-        address_type address() const noexcept
+        address_type address() const /*noexcept*/
         { return source1 + offset; }
     }; static_assert(sizeof(entry) == 12);
 
 
-    round_queue <entry,32> loader;  /* Load  buffer. */
+    round_queue <entry,32> loader;  /* Load  buffer.   */
+    round_queue <entry,32> storer;  /* Store buffer.   */
     entry current;                  /* Current  entry. */
-    
-    address_type pc =   0  ;    /* PC pointer. */
 
-    byte_stype cc   =  -1  ;    /* Stupid counter...... */
-    byte_utype last = FREE ;    /* Lastest store information. */
-    byte_utype index;   /* Index of current opeartion in queue. */
-    bool    load_tag;   /* Whether current is load operation. */
+    address_type pc =   0 ;     /* PC pointer. */
 
+    byte_stype   cc =  -1 ;     /* Stupid counter...... */
+    byte_utype last = FREE;     /* Last store RoB index in RoB   . */
+    byte_utype tail = FREE;     /* Last store RoB index in storer.*/
+    byte_utype index;   /* Index of current opeartion in loader queue. */
+    bool   load_tag = false;   /* Whether current is load operation. */
 
     /**
      * @brief Inner method of fetching a command.
@@ -66,12 +66,15 @@ struct memory : memory_chip <memory_size> {
      * @param __pc The real PC value.
      * @return command_type 
      */
-    void fetch(command_type &__cmd)
-    noexcept { memory_chip::load(pc,__cmd,4); }
+    void fetch(command_type &__cmd) /*noexcept*/ { memory_chip::load(pc,__cmd,4); }
 
-    /* Inner handle. */
-    return_list work_counter() noexcept {
-        if(~cc || cc--) return {};
+    /**
+     * @brief Work for one cycle. 
+     * 
+     * @return Whether load information is done.
+     */
+    return_list work() /*noexcept*/ {
+        if(cc == -1 || cc--) return {};
 
         /* Now the work is done and must be commited at once. */
         if(load_tag) { /* Load from memory */
@@ -97,29 +100,20 @@ struct memory : memory_chip <memory_size> {
             while(size-- && loader[head].prev == current.dest) {
                 loader[head].prev = FREE;
                 if(++head == loader.length()) head = 0;
-            } if(last == current.dest) last = FREE;
+            }
+            if(tail == current.dest) tail = FREE;
+            if(last == current.dest) last = FREE;
             return {};
         }
     }
 
-    /**
-     * @brief Work for one cycle. 
-     * 
-     * @return Whether load information is done.
-     */
-    return_list work() noexcept {
-        /* Empty and nothing doing. */
-        if(loader.empty()) return {};
-        /* Counter should decrease in this cycle. */
-        return work_counter();
+    /* Clear the pipeline when prediction fails. */
+    void clear_pipeline() /*noexcept*/ {
+        loader.clear() , last = tail , load_tag = false;
     }
 
-    /* Clear the pipeline. */
-    void clear_pipeline() noexcept
-    { loader.clear() , cc = -1 , last = FREE; }
-
     /* A wire indicating whether the loader is full. */
-    bool is_full() const noexcept { return loader.full(); }
+    bool is_full() const /*noexcept*/ { return loader.full(); }
 
     /**
      * @brief Insert a command to the queue.
@@ -129,16 +123,16 @@ struct memory : memory_chip <memory_size> {
     inline void insert (word_utype __code,
                         word_utype __dest,
                         word_stype __offset,
-                        wrapper    __reg1) noexcept {
+                        wrapper    __reg1) /*noexcept*/ {
         loader.push({
-                    __code,
-                    last,
-                    __dest,
-                    __reg1.index(),
-                    __offset,
-                    __reg1.value(),
-                    0
-                });
+            __code,
+            last,
+            __dest,
+            __reg1.index(),
+            __offset,
+            __reg1.value(),
+            0
+        });
     }
 
     /* Special insert for store command. */
@@ -149,15 +143,21 @@ struct memory : memory_chip <memory_size> {
      * 
      * @attention Use it in the end of a cycle.
      */
-    void store (word_utype  __dest,
-                word_utype  __code,
-                register_type __reg1,
-                register_type __reg2) noexcept {
-        load_tag = false , cc = 2;
-        current.dest    = __dest;
-        current.code    = __code;
-        current.source1 = __reg1;
-        current.source2 = __reg2;
+    void store (word_utype  __code,
+                word_utype  __dest,
+                word_stype  __offs,
+                address_type __reg1,
+                address_type __reg2) /*noexcept*/ {
+        tail = __dest;
+        storer.push({
+            __code,
+            0,
+            __dest,
+            0,
+            __offs,
+            __reg1,
+            __reg2
+        }); if(storer.full()) throw error("Storer overflow!");
     }
 
     /**
@@ -166,7 +166,7 @@ struct memory : memory_chip <memory_size> {
      * @param wrapper Register file modification.
      * @attention Use it after insertion.
      */
-    void update(wrapper __data) noexcept {
+    void update(wrapper __data) /*noexcept*/ {
         int head = loader.head;
         int size = loader.dist;
         while(size--) {
@@ -175,24 +175,33 @@ struct memory : memory_chip <memory_size> {
                 __c.idx1    = FREE;
                 __c.source1 = __data.value();
             }
+            if(++head == loader.length()) head = 0;
         }
     }
 
     /**
-     * @brief This fucking operation is designed to 
+     * @brief This fucking operation is designed to
      * simulate real hardware, as real hardware relies
      * on the state of last cycle.
      * 
      * @attention This function should only be operated
      * in the end of a cycle.
      */
-    void sync() noexcept {
+    void sync() /*noexcept*/ {
         /* Is calculating || Nothing can be done. */
-        if(cc != -1 || loader.empty()) return;
+        if(cc != -1) return;
 
-        /* Tries to load a new element. */
+        /* Pop out all useless elements first. */
         while(loader.size() && loader.front().is_done()) loader.pop();
 
+        /* Tries to store a new element first. */
+        if(storer.size()) {
+            load_tag = false , cc = 2;
+            current  = storer.front();
+            storer.pop(); return;
+        }
+    
+        /* Tries to load a new element then. */
         int head = loader.head;
         int size = loader.dist;
         /* Find the first ready and undone , then work on it. */
@@ -200,8 +209,7 @@ struct memory : memory_chip <memory_size> {
             if(loader[head].is_ready() && !loader[head].is_done()) {
                 load_tag = true, cc = 2;
                 current  = loader[head];
-                index    = head;
-                return;
+                index    = head; return;
             } if(++head == loader.length()) head = 0;
         }
     }
