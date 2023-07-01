@@ -9,4 +9,3 @@ signed main() {
     printf("%u",result);
     return 0;
 }
-

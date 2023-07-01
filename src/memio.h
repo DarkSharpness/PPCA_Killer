@@ -28,19 +28,19 @@ struct memory : memory_chip <memory_size> {
         register_type  source2;  /* Result of the calculation or source. */
 
         /* Load signed or unsigned. */
-        bool sign() const /*noexcept*/ { return code & 0b100; }
+        bool sign() const noexcept { return code & 0b100; }
         /* The bit_length of data.  */
-        auto size() const /*noexcept*/ { return code & 0b011; }
+        auto size() const noexcept { return code & 0b011; }
 
         /* Set this command as done. */
-        void set_done() /*noexcept*/       { code |= 0b011; }
+        void set_done()       noexcept { code |= 0b011; }
         /* Whether this command is done. */
-        bool is_done()  const /*noexcept*/ { return size() == 0b011; }
+        bool is_done()  const noexcept { return size() == 0b011; }
         /* Whether this command is available to operate. */
-        bool is_ready() const /*noexcept*/ { return   idx1 == FREE;  }
+        bool is_ready() const noexcept { return   idx1 == FREE;  }
 
         /* Return the real address. */
-        address_type address() const /*noexcept*/
+        address_type address() const noexcept
         { return source1 + offset; }
     }; static_assert(sizeof(entry) == 12);
 
@@ -51,10 +51,9 @@ struct memory : memory_chip <memory_size> {
     address_type pc =   0 ;     /* PC pointer. */
 
     bool   load_tag = false;    /* Whether current is load operation. */
-    byte_stype   cc =  -1 ;     /* Stupid counter...... */
     byte_utype last = FREE;     /* Last store RoB index in RoB. */
     byte_utype index;           /* Index of current opeartion in loader queue. */
-
+    byte_stype  cc =  -1 ;      /* Stupid counter...... */
     /**
      * @brief Inner method of fetching a command.
      * Note that this command is only used in C++
@@ -64,17 +63,16 @@ struct memory : memory_chip <memory_size> {
      * @param __pc The real PC value.
      * @return command_type 
      */
-    void fetch(command_type &__cmd) /*noexcept*/ { memory_chip::load(pc,__cmd,4); }
+    void fetch(command_type &__cmd) noexcept { memory_chip::load(pc,__cmd,4); }
 
     /**
      * @brief Work for one cycle. 
      * 
      * @return Whether load information is done.
      */
-    return_list work() /*noexcept*/ {
+    return_list work() noexcept {
         if(cc == -1 || cc-- || !load_tag) return {};
 
-        if(current.source2 != 0) throw error("Unknown source");
         /* Now the loading work is done and must be commited at once. */
         memory_chip::load(current.address(),
                           current.source2,
@@ -92,11 +90,11 @@ struct memory : memory_chip <memory_size> {
     }
 
     /* Clear the pipeline when prediction fails. */
-    void clear_pipeline() /*noexcept*/ 
+    void clear_pipeline() noexcept
     { loader.clear() , last = FREE, load_tag = false , cc = -1; }
 
     /* A wire indicating whether the loader is full. */
-    bool is_full() const /*noexcept*/ { return loader.full(); }
+    bool is_full() const noexcept { return loader.full(); }
 
     /**
      * @brief Insert a command to the queue.
@@ -106,7 +104,7 @@ struct memory : memory_chip <memory_size> {
     inline void insert (word_utype __code,
                         word_utype __dest,
                         word_stype __offset,
-                        wrapper    __data) /*noexcept*/ 
+                        wrapper    __data) noexcept
     { loader.push({__code,last,__dest,__data.index(),__offset,__data.value(),0}); }
 
     /* Special insert for store command. */
@@ -120,10 +118,9 @@ struct memory : memory_chip <memory_size> {
     void store (word_utype  __code,
                 word_utype  __dest,
                 address_type __addr,
-                address_type __reg2) /*noexcept*/ {
-        if(load_tag && cc != -1) throw error("Store failure!");
-
+                address_type __reg2) noexcept {
         if(last == __dest) last = FREE;
+
         load_tag = false , cc += 3;  /* Store time. */
         memory_chip::store(__addr,__reg2,1 << (__code & 0b11));
 
@@ -142,7 +139,7 @@ struct memory : memory_chip <memory_size> {
      * @param wrapper Register file modification.
      * @attention Use it after insertion.
      */
-    void update(wrapper __data) /*noexcept*/ {
+    void update(wrapper __data) noexcept {
         int head = loader.head;
         int size = loader.dist;
         while(size--) {
@@ -162,7 +159,7 @@ struct memory : memory_chip <memory_size> {
      * @attention This function should only be operated
      * in the end of a cycle.
      */
-    void sync() /*noexcept*/ {
+    void sync() noexcept {
         /* Is calculating. */
         if(cc != -1) return;
 

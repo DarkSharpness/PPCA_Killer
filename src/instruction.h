@@ -56,7 +56,7 @@ struct instruction {
     };
 
     /* Full immediate number. */
-    address_type B_immediate() const /*noexcept*/ {
+    address_type B_immediate() const noexcept {
         return
             sign_expand <13,address_type> (
                 B_imm_12_12 << 12 |
@@ -67,7 +67,7 @@ struct instruction {
     }
 
     /* Full immediate number. */
-    address_type J_immediate() const /*noexcept*/ {
+    address_type J_immediate() const noexcept {
         return
             sign_expand <21,address_type> (
                 J_imm_20_20 << 20 |
@@ -78,14 +78,14 @@ struct instruction {
     }
 
     /* Full immediate number. */
-    address_type U_immediate() const /*noexcept*/
+    address_type U_immediate() const noexcept
     { return U_imm_31_12 << 12; }
 
-    address_type I_immediate() const /*noexcept*/
+    address_type I_immediate() const noexcept
     { return sign_expand <12,address_type> (I_imm_11_00); }
 
     /* Full immediate number. */
-    address_type S_immediate() const /*noexcept*/
+    address_type S_immediate() const noexcept
     { return sign_expand <12,address_type> (S_imm_11_05 << 5 | S_imm_04_00 << 0); }
 }; static_assert(sizeof(instruction) == sizeof(command_type));
 

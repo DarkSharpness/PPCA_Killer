@@ -20,17 +20,17 @@ struct bus {
      * 
      * @param __list List of updates.
      */
-    void reservation_catch(const return_list &__list) /*noexcept*/
+    void reservation_catch(const return_list &__list) noexcept
     { for(auto &&iter : __list) RoB_update.push_back(iter); }
 
-     /**
+    /**
      * @brief Catch the signal from load store buffer.
      * It will update RoB in the end of a cycle.
      * 
      * @param __list List of updates.
      */
     void memory_catch(const return_list &__data)
-    /*noexcept*/ { reservation_catch(__data); }
+    noexcept { reservation_catch(__data); }
 
     /**
      * @brief Catch the signal from reorder buffer.
@@ -38,15 +38,14 @@ struct bus {
      * 
      * @param __list List of updates.
      */
-    void reorder_catch(wrapper __data) /*noexcept*/
-    { ReG_update = __data; }
+    void reorder_catch(wrapper __data) noexcept { ReG_update = __data; }
 
     /**
      * @brief Clear everything 
      * 
      * @attention Work in the end of a cycle, after inner data is used.
      */
-    void clear() { RoB_update.clear(); ReG_update = {0,0}; }
+    void clear() noexcept { RoB_update.clear(); ReG_update = {0,0}; }
 };
 
 

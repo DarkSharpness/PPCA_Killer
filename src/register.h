@@ -51,7 +51,7 @@ struct register_file {
     byte_utype nxt[32]; /* Dependency of register. */
 
     /* Intialization. */
-    register_file() {
+    register_file() noexcept {
         memset(reg,  0 ,sizeof(reg));  
         memset(nxt,FREE,sizeof(nxt)); /* Free. */
     }
@@ -64,7 +64,7 @@ struct register_file {
      * @param __new Value of the new register data.
      */
     void commit(word_utype __idx,word_utype __pos,
-                register_type __new) /*noexcept*/ {
+                register_type __new) noexcept {
         if(__idx) reg[__idx] = __new;
         if(nxt[__idx] == __pos) nxt[__idx] = FREE;
     }
@@ -77,14 +77,14 @@ struct register_file {
      * @param __pos Index in the reorder buffer.
      */
     void insert(word_utype __idx,byte_utype __pos)
-    /*noexcept*/ { if(__idx) nxt[__idx] = __pos; }
+    noexcept { if(__idx) nxt[__idx] = __pos; }
 
     /* Whether the current register is busy. (-1 -> not busy) */
-    wrapper reorder(byte_utype __pos) const /*noexcept*/
+    wrapper reorder(byte_utype __pos) const noexcept
     { return {reg[__pos],nxt[__pos]}; }
 
     /* Clear the pipeline when prediction fails. */
-    void clear_pipeline() /*noexcept*/{ memset(nxt,FREE,sizeof(nxt)); }
+    void clear_pipeline() noexcept { memset(nxt,FREE,sizeof(nxt)); }
 };
 
 }

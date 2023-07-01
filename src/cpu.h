@@ -33,14 +33,14 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     address_type  pc_delta = 0; /* The delta of PC in each cycle. */
 
     /* Whether the command  */
-    bool is_terminal() const /*noexcept*/
+    bool is_terminal() const noexcept
     { return jalr_lock && reorder_buffer::empty(); }
 
     /* Whether to jump or not. */
-    bool predict() const /*noexcept*/ { return false; }
+    bool predict() const noexcept { return false; }
 
     /* Whether the command is issuable. */
-    bool issueable() const /*noexcept*/ {
+    bool issueable() const noexcept {
         if(reorder_buffer::is_full()) return false;
         switch(current.suc) {
             case suc_code::jal   :
@@ -56,16 +56,13 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     }
 
     /**
-     * @brief Do fetch operation iff not locked or full.
+     * @brief Do fetch operation iff not locked.
      * 
      */
-    void work_fetch() /*noexcept*/ {
+    void work_fetch() noexcept {
         if(jalr_lock) return void(fetch_cur = false);
         fetch_cur = true;       /* This tag may go invalid in future. */
         fetch(nextcmd.command); /* Fetch one command at a time. */
-
-        // if(pc == 0x1400)
-        //     std::cout << "Here" << std::endl;
 
         if(nextcmd.suc == suc_code::jal) {
             pc_delta = nextcmd.J_immediate();
@@ -74,43 +71,17 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                 pc_delta = nextcmd.B_immediate();
             else /* No jump case. */
                 pc_delta = 4;
-        } 
-        // else if(nextcmd.suc == suc_code::jalr)
-        //      pc_delta = 0;
-        else pc_delta = 4;
+        } else pc_delta = 4;
     }
 
     /**
      * @brief Reset PC when BRANCH failed or JALR.
      * 
      */
-    void reset_pc(address_type __pc) /*noexcept*/ { pc = __pc; }
-
-    /* Work in one cycle. */
-    bool work() /*noexcept*/ {
-        ++clock;
-        // if(global_param == 121630)
-        //     freopen("CON","w",stdout);
-        // std::cout << std::hex << pc_pre << ' ' << pc << std::dec << std::endl;
-        work_fetch();
-        flow.memory_catch(memory::work());
-        flow.reorder_catch(reorder_buffer::work());
-        flow.reservation_catch(reservation_station::work());
-        // bool fuck_tag = flow.ReG_update.is_empty();
-        global_sync();
-
-        // if(global_param >= 121630 && !fuck_tag) {
-        //     std::cout << "Register state:\n";
-        //     for(int i = 0 ; i < 32 ; ++i)
-        //         std::cout << this->reg[i] << ' ';
-        //     std::cout << "\n---------------------\n";
-        // }
-
-        return !is_terminal();
-    }
+    void reset_pc(address_type __pc) noexcept { pc = __pc; }
 
     /* Clear all the instruction when prediction fail. */
-    void clear_instruction() /*noexcept*/
+    void clear_instruction() noexcept
     { jalr_lock = fetch_pre = fetch_cur = full_lock = false; }
 
     /**
@@ -118,7 +89,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
      * 
      * @attention Use it in the end of a cycle.
      */
-    void sync_issue() /*noexcept*/ {
+    void sync_issue() noexcept {
         if(!fetch_pre)   return void(full_lock = false);
         if(!issueable()) return void(full_lock = true );
 
@@ -203,7 +174,8 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                 __done = true;
                 break; /* Original command. */
 
-            default: throw; /* This should never happen. */
+            /* Mistaken prediction with wrong address. */
+            default: return void(full_lock = true); 
         }
 
         /* Require updating register. */
@@ -212,11 +184,11 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                 __dest,
                 reorder_buffer::buffer_tail()
             );
-        reorder_buffer::insert(__arg,__tag,__dest,__done,pc_pre);
+        reorder_buffer::insert(__arg,__tag,__dest,__done);
     }
 
     /* Flush the bus data. */
-    void sync_bus() /*noexcept*/ {
+    void sync_bus() noexcept {
         /* Commit message is not empty. */
         int __head = reorder_buffer::buffer_head();
         if(!flow.ReG_update.is_empty()) {
@@ -250,7 +222,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                     );
                 } break;
 
-                default: throw;/* This should never happen. */
+                default: ;/* This should never happen. */
             }
         } /* Reorder buffer may need updating. */
         reorder_buffer::update(flow.RoB_update);
@@ -258,7 +230,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     }
 
     /* Synchronize the insturction unit. */
-    void sync_instruction() /*noexcept*/ {
+    void sync_instruction() noexcept {
         /* Only when issue success and fetch sucess. */
         if(fetch_cur && !full_lock) {
             current        = nextcmd;
@@ -270,7 +242,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     }
 
     /* Clear all the pipelines. */
-    void global_clear() /*noexcept*/ {
+    void global_clear() noexcept {
         flow.clear();
         clear_instruction();
         memory::clear_pipeline();
@@ -280,7 +252,7 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     }
 
     /* Global synchronize. */
-    void global_sync() /*noexcept*/ {
+    void global_sync() noexcept {
         sync_issue();
         sync_bus();
         sync_instruction();
@@ -288,6 +260,20 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
         memory::sync();
         reorder_buffer::sync();
         reservation_station::sync();
+    }
+
+    /* Work in one cycle. */
+    bool work() noexcept {
+        ++clock;
+
+        work_fetch();
+        flow.memory_catch(memory::work());
+        flow.reorder_catch(reorder_buffer::work());
+        flow.reservation_catch(reservation_station::work());
+        
+        /* Synchronize to simulate hardware. */   
+        global_sync();
+        return !is_terminal();
     }
 
 };

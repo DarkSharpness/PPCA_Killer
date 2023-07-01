@@ -20,7 +20,7 @@ struct reservation_station {
         register_type result;   /* The result of reservation station. */
 
         /* Whether this entry is available to be executed. */
-        bool is_ready() const /*noexcept*/ { return idx1 == FREE && idx2 == FREE; }
+        bool is_ready() const noexcept { return idx1 == FREE && idx2 == FREE; }
     }; static_assert(sizeof(entry) == 16);
 
 
@@ -32,11 +32,11 @@ struct reservation_station {
     std::bitset <32> array_syncs{-1U};  /* Array's sync data. */
 
     /* A wire indicating whether the arithmetic station is full. */
-    bool is_full() const /*noexcept*/
+    bool is_full() const noexcept
     { return array_state.size() == array_state.count(); }
 
     /* Work in the cycle. */
-    return_list work() /*noexcept*/ {
+    return_list work() noexcept {
         return_list list; /* Return value list.     */
         size_t __cnt = 0; /* Count of ALU occupied. */
         /* This process is actually working parrallelly. */
@@ -53,7 +53,7 @@ struct reservation_station {
     }
 
     /* Clear the pipeline when prediction fails. */
-    void clear_pipeline() /*noexcept*/
+    void clear_pipeline() noexcept
     { array_state.reset(),array_syncs.set(); }
 
 
@@ -65,7 +65,7 @@ struct reservation_station {
     void insert(ALU_code __code,
                 wrapper  __reg1,
                 wrapper  __reg2,
-                register_type __dest) /*noexcept*/ {
+                register_type __dest) noexcept {
         int __x = (~array_state)._Find_first();
         array_state[__x]= true; /* Set occupied. */
         array[__x].op   = __code;
@@ -81,7 +81,7 @@ struct reservation_station {
      * 
      * @attention Use it in the end of a cycle after inserting.
      */
-    void update(wrapper __data) /*noexcept*/ {
+    void update(wrapper __data) noexcept {
         for(auto i  = array_state._Find_first() ;
                  i != array_state.size() ; i = array_state._Find_next(i)) {
             if(array[i].idx1 == __data.index()) {
@@ -104,10 +104,7 @@ struct reservation_station {
      * @attention This function should only be operated
      * in the end of the cycle.
      */
-    void sync() {
-        array_state &= array_syncs;
-        array_syncs.set();
-    }
+    void sync() noexcept { array_state &= array_syncs; array_syncs.set(); }
 
 };
 

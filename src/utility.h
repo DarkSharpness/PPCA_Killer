@@ -13,13 +13,6 @@
 
 namespace dark {
 
-size_t global_param = 0; /* Debug use only. */
-
-struct error {
-    error(std::string __str) /*noexcept*/
-    { freopen("CON","w",stdout); std::cout << __str << std::endl; }
-};
-
 
 /* Suc : Last 7 bit code. */
 enum class suc_code : uint8_t {
@@ -96,31 +89,31 @@ struct wrapper { /* 32 + 7 bits */
     uint32_t idx; /* Index of the register/RoB. */
 
     /* Return the index in reorder buffer. */
-    uint32_t index() const /*noexcept*/ { return idx & FREE; }
+    uint32_t index() const noexcept { return idx & FREE; }
     /* Return the value from given reorder.(is_file() == true) */
-    uint32_t value() const /*noexcept*/ { return val; }
+    uint32_t value() const noexcept { return val; }
  
     /* Return pc pointer from given reorder.(is_file() == true) */
-    uint32_t pc()    const /*noexcept*/ { return val & ~1; }
+    uint32_t pc()    const noexcept { return val & ~1; }
     /* Return the tagging. */
-    uint32_t tag()   const /*noexcept*/ { return idx >> 5; }
+    uint32_t tag()   const noexcept { return idx >> 5; }
 
     /* Whether to store into register file. */
-    bool is_file()    const /*noexcept*/ { return tag() == 0; }
+    bool is_file()    const noexcept { return tag() == 0; }
     /* Whether a  jalr command. */
-    bool is_jalr()    const /*noexcept*/ { return tag() == 1; }
+    bool is_jalr()    const noexcept { return tag() == 1; }
     /* Whether a store command. */
-    bool is_store()   const /*noexcept*/ { return tag() == 2; }
+    bool is_store()   const noexcept { return tag() == 2; }
     /* Previous prediction (True / False). */
-    bool prediction() const /*noexcept*/ { return idx & 1; }
+    bool prediction() const noexcept { return idx & 1; }
     /* Whether prediction is true. */
-    bool is_wrong()   const /*noexcept*/ { return (val ^ idx) & 1; }
+    bool is_wrong()   const noexcept { return (val ^ idx) & 1; }
     /* Whether jump successfully. */
-    bool is_jump_AC() const /*noexcept*/ { return tag() == 3 && is_wrong() == 0; }
+    bool is_jump_AC() const noexcept { return tag() == 3 && is_wrong() == 0; }
     /* Whether jump wrongly. */
-    bool is_jump_WA() const /*noexcept*/ { return tag() == 3 && is_wrong() == 1; }
+    bool is_jump_WA() const noexcept { return tag() == 3 && is_wrong() == 1; }
     /* Whether the commit message is empty. */
-    bool is_empty()   const /*noexcept*/ { return idx == 0; }
+    bool is_empty()   const noexcept { return idx == 0; }
 };
 
 
@@ -144,11 +137,11 @@ using register_type = uint32_t;
 using return_list = std::vector <wrapper>;
 
 /* Judge whether given char is a visible char */
-bool is_visible_char(int __c) /*noexcept*/
+bool is_visible_char(int __c) noexcept
 { return __c < 127 && __c > 32; }
 
 /* Read a token. Return whether EOF isn't reached. */
-bool read_token(char *__str) /*noexcept*/ {
+bool read_token(char *__str) noexcept {
     int __c;
     while(!is_visible_char(__c = getchar()))
         if(__c == EOF) return false;
@@ -159,11 +152,11 @@ bool read_token(char *__str) /*noexcept*/ {
 }
 
 /* Map a char into a hex number. */
-int char_map(char x) /*noexcept*/ { return isdigit(x) ? x - '0' : x - 'A' + 10; }
+int char_map(char x) noexcept { return isdigit(x) ? x - '0' : x - 'A' + 10; }
 
 /* Turn a hex number string into a trivial number type. */
 template <class T>
-T hex_to_integer(char *__str) /*noexcept*/ {
+T hex_to_integer(char *__str) noexcept {
     T __v = 0;
     while(*__str) __v = __v << 4 | char_map(*__str++);
     return __v;
@@ -175,7 +168,7 @@ constexpr size_t bit_length = sizeof(T) << 3;
 
 /* Expand n bit integer by its sign. */
 template <size_t __n,class T>
-T sign_expand(T __v) /*noexcept*/ {
+T sign_expand(T __v) noexcept {
     static_assert(__n > 0 && __n < bit_length <T>);
     return __v & (1 << (__n - 1)) ? /* Test sign bit of current integer. */
              ((-1u) << __n) | __v : /* Fill upper bits with 1. */
@@ -184,7 +177,7 @@ T sign_expand(T __v) /*noexcept*/ {
 
 /* Expand n bit integer by its sign. */
 template <size_t __n,class T>
-T sign_expand(T __v,bool __bit) /*noexcept*/ {
+T sign_expand(T __v,bool __bit) noexcept {
     static_assert(__n > 0 && __n < bit_length <T>);
     return __bit == true ? /* Test sign bit of current integer. */
              ((-1u) << __n) | __v : /* Fill upper bits with 1. */
