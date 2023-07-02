@@ -7,6 +7,8 @@
 #include "register.h"
 #include "instruction.h"
 #include "reservation.h"
+#include "predictor.h"
+
 #include <functional>
 #include <random>
 
@@ -16,7 +18,7 @@ namespace dark {
  * @brief A simple CPU simulator with instruction unit.
  * 
  */
-struct cpu : memory,register_file,reservation_station,reorder_buffer {
+struct cpu : memory,register_file,reservation_station,reorder_buffer,predictor {
     bus            flow;        /* Data flow. */
     size_t        clock;        /* Internal clock. */
     instruction current;        /* Current command. */
@@ -34,28 +36,16 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     address_type  pc_pre   = 0; /* PC in last cycle. */
     address_type  pc_delta = 0; /* The delta of PC in each cycle. */
 
+    size_t prediction_count; /* Count of all predictions. */
+    size_t prediction_wrong; /* Wrong rate. */
+
+
     /* Whether the command  */
     bool is_terminal() const noexcept
     { return jalr_lock && reorder_buffer::empty(); }
 
-    /* Whether to jump or not. */
-    bool predict() const noexcept { return false; }
-
     /* Whether the command is issuable. */
-    bool issueable() const noexcept {
-        if(reorder_buffer::is_full()) return false;
-        switch(current.suc) {
-            case suc_code::jal   :
-            case suc_code::lui   :
-            case suc_code::auipc :
-            case suc_code::scode :
-                return true;
-            case suc_code::lcode :
-                return !memory::is_full();
-            default : /* Into reservation station. */
-                return !reservation_station::is_full();
-        }
-    }
+    bool issueable() const noexcept { return !reorder_buffer::is_full(); }
 
     /**
      * @brief Do fetch operation iff not locked.
@@ -64,12 +54,13 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
     void work_fetch() noexcept {
         if(jalr_lock) return void(fetch_cur = false);
         fetch_cur = true;       /* This tag may go invalid in future. */
+        if(full_lock) return;   /* Locked by full,so no need fetching. */
         fetch(nextcmd.command); /* Fetch one command at a time. */
 
         if(nextcmd.suc == suc_code::jal) {
             pc_delta = nextcmd.J_immediate();
         } else if(nextcmd.suc == suc_code::bcode) {
-            if(bool(prediction_cur = predict()))
+            if(bool(prediction_cur = predict(pc)))
                 pc_delta = nextcmd.B_immediate();
             else /* No jump case. */
                 pc_delta = 4;
@@ -209,6 +200,10 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
                     memory::update(flow.ReG_update); break;
 
                 case BRANCH_TAG :
+                    predictor::update_prediction(
+                        flow.ReG_update.is_wrong(),
+                        flow.ReG_update.result()
+                    );
                     if(flow.ReG_update.is_wrong()) {
                         reset_pc(flow.ReG_update.pc());
                         return global_clear();
@@ -278,10 +273,10 @@ struct cpu : memory,register_file,reservation_station,reorder_buffer {
 
 
         // std::shuffle(order,order + array_length(order),abelcat);
-        for(int i = 0 ; i != array_length(order) ; ++i)
+        for(size_t i = 0 ; i != array_length(order) ; ++i)
             std::swap(order[i],order[i % array_length(order)]);
 
-        for(int i = 0 ; i != array_length(order) ; ++i)
+        for(size_t i = 0 ; i != array_length(order) ; ++i)
             func[order[i]]();
 
         // work_fetch();

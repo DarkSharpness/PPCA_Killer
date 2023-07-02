@@ -106,6 +106,8 @@ struct reservation_station {
      */
     void sync() noexcept { array_state &= array_syncs; array_syncs.set(); }
 
+    /* Return the capacity of the reservation station. */
+    constexpr int capacity() const noexcept { return array_length(array); }
 };
 
 }

@@ -179,6 +179,9 @@ struct memory : memory_chip <memory_size> {
         }
     }
 
+    /* Capacity of the loader. */
+    constexpr int capacity() const noexcept { return loader.length(); }
+
 };
 
 }

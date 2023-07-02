@@ -83,6 +83,8 @@ struct reorder_buffer {
      */
     void sync() noexcept { if(sync_tag) queue.pop() , sync_tag = false; }
 
+    /* Return the capacity of the reorder buffer. */
+    constexpr int capacity() const noexcept { return queue.length(); }
 };
 
 

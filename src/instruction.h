@@ -56,7 +56,7 @@ struct instruction {
     };
 
     /* Full immediate number. */
-    address_type B_immediate() const noexcept {
+    word_stype B_immediate() const noexcept {
         return
             sign_expand <13,address_type> (
                 B_imm_12_12 << 12 |

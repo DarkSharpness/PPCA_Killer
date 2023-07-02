@@ -106,7 +106,9 @@ struct wrapper { /* 32 + 7 bits */
     bool is_store()   const noexcept { return tag() == 2; }
     /* Previous prediction (True / False). */
     bool prediction() const noexcept { return idx & 1; }
-    /* Whether prediction is true. */
+    /* Prediction result   (True / False)*/
+    bool result()     const noexcept { return val & 1; }
+    /* Whether prediction is wrong. */
     bool is_wrong()   const noexcept { return (val ^ idx) & 1; }
     /* Whether jump successfully. */
     bool is_jump_AC() const noexcept { return tag() == 3 && is_wrong() == 0; }
@@ -185,7 +187,7 @@ T sign_expand(T __v,bool __bit) noexcept {
 }
 
 template <class T,size_t __n>
-constexpr size_t array_length(T (&__a)[__n]) { return __n; }
+constexpr size_t array_length(T (&)[__n]) { return __n; }
 
 
 }
