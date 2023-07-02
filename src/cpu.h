@@ -20,7 +20,7 @@ namespace dark {
  */
 struct cpu : memory,register_file,reservation_station,reorder_buffer,predictor {
     bus            flow;        /* Data flow. */
-    size_t        clock;        /* Internal clock. */
+    size_t        clock = 0;    /* Internal clock. */
     instruction current;        /* Current command. */
     instruction nextcmd;        /* New instruction to fetch. */
 

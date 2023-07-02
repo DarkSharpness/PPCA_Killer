@@ -74,6 +74,9 @@ struct predictor {
     double get_accuracy() const noexcept
     { return static_cast <double> (count[0]) / (count[0] + count[1]); }
 
+    /* Return the total of branches meeting. */
+    size_t branches() const noexcept { return count[0] + count[1]; }
+
     /* Return the capacity of the predictor. */
     constexpr int capacity() const noexcept { return uncommited.length(); }
 };
